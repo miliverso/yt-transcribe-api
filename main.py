@@ -3,7 +3,6 @@ from pydantic import BaseModel
 import yt_dlp
 import os
 import random
-from free_proxy_list import get_proxy_list
 
 app = FastAPI()
 
@@ -11,12 +10,14 @@ class VideoRequest(BaseModel):
     url: str
 
 def obtener_proxy_valido():
-    # Obtiene lista fresca y filtra por tipo http
+    # Importación diferida para no bloquear el inicio del contenedor
+    from free_proxy_list import get_proxy_list
     try:
         proxies = get_proxy_list()
+        # Filtramos proxies HTTP para mayor compatibilidad
         http_proxies = [f"http://{p['ip']}:{p['port']}" for p in proxies if p['type'] == 'http']
         return random.choice(http_proxies) if http_proxies else None
-    except:
+    except Exception:
         return None
 
 def descargar_audio(url_video):
@@ -35,15 +36,18 @@ def descargar_audio(url_video):
         'noplaylist': True,
     }
     
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(url_video, download=True)
-        return f"/tmp/{info['id']}.mp3"
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url_video, download=True)
+            return f"/tmp/{info['id']}.mp3"
+    except Exception as e:
+        raise Exception(f"Fallo en descarga con proxy {proxy}: {str(e)}")
 
 @app.post("/transcribir")
 async def transcribir(request: VideoRequest):
     try:
         archivo_audio = descargar_audio(request.url)
-        # Aquí inicializarás faster-whisper con el archivo_audio
+        # Aquí llamarás a faster-whisper en el siguiente paso
         return {"status": "success", "file": archivo_audio}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
