@@ -6,23 +6,24 @@ import random
 
 app = FastAPI()
 
+
 class VideoRequest(BaseModel):
     url: str
 
+
 def obtener_proxy_valido():
     # Importación diferida para no bloquear el inicio del contenedor
-    from free_proxy_list import get_proxy_list
+    from fp.fp import FreeProxy
     try:
-        proxies = get_proxy_list()
-        # Filtramos proxies HTTP para mayor compatibilidad
-        http_proxies = [f"http://{p['ip']}:{p['port']}" for p in proxies if p['type'] == 'http']
-        return random.choice(http_proxies) if http_proxies else None
+        # rand=True mezcla la lista de proxies, timeout=1 evita esperas largas
+        return FreeProxy(timeout=1, rand=True).get()
     except Exception:
         return None
 
+
 def descargar_audio(url_video):
     proxy = obtener_proxy_valido()
-    
+
     ydl_opts = {
         'format': 'bestaudio/best',
         'postprocessors': [{'key': 'FFmpegExtractAudio', 'preferredcodec': 'mp3', 'preferredquality': '192'}],
@@ -35,13 +36,14 @@ def descargar_audio(url_video):
         'no_warnings': True,
         'noplaylist': True,
     }
-    
+
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url_video, download=True)
             return f"/tmp/{info['id']}.mp3"
     except Exception as e:
         raise Exception(f"Fallo en descarga con proxy {proxy}: {str(e)}")
+
 
 @app.post("/transcribir")
 async def transcribir(request: VideoRequest):
@@ -51,6 +53,7 @@ async def transcribir(request: VideoRequest):
         return {"status": "success", "file": archivo_audio}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 if __name__ == "__main__":
     import uvicorn
