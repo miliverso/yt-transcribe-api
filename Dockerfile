@@ -13,3 +13,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # El comando para arrancar la API usando el puerto que exige Cloud Run
 CMD exec uvicorn main:app --host 0.0.0.0 --port $PORT
+
+RUN pip install --upgrade pip
+CMD exec uvicorn main:app --host 0.0.0.0 --port $PORT
