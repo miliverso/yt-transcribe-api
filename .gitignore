@@ -1,0 +1,22 @@
+# Entornos virtuales
+venv/
+.venv/
+env/
+
+# Archivos temporales de audio y transcripción
+*.mp3
+*.txt
+*.wav
+*.m4a
+
+# Caché de Python
+__pycache__/
+*.py[cod]
+
+# Carpetas de desarrollo y configuración local
+.idea/
+.vscode/
+.DS_Store
+
+# Archivos de entorno
+.env
