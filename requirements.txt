@@ -2,4 +2,4 @@ fastapi
 uvicorn
 yt-dlp
 faster-whisper
-free-proxy-list
+free-proxy
