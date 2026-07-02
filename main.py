@@ -37,7 +37,7 @@ def get_ydl_opts(output_path, user_headers=None):
         logger.info(f"Headers personalizados aplicados: {user_headers}")
 
     opts = {
-        'format': 'bestaudio/best',
+        'format': 'bestaudio', # Ajustado para mayor compatibilidad
         'postprocessors': [{
             'key': 'FFmpegExtractAudio',
             'preferredcodec': 'mp3',
@@ -56,8 +56,8 @@ def get_ydl_opts(output_path, user_headers=None):
     # Configuración de Proxy (ScraperAPI)
     proxy_key = os.getenv("SCRAPERAPI_KEY")
     if proxy_key:
-        opts['proxy'] = f"http://scraperapi:{proxy_key}@proxy-server.scraperapi.com:8001"
-        logger.info("Proxy configurado exitosamente mediante ScraperAPI.")
+        opts['proxy'] = f"http://scraperapi:{proxy_key}@proxy-server.scraperapi.com:8001/?render=true"
+        logger.info("Proxy configurado con renderizado (ScraperAPI).")
         
     return opts
 
