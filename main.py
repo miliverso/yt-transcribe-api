@@ -5,7 +5,7 @@ from typing import Optional, Dict
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
-# Configuración de logs para ver qué está pasando en Cloud Run
+# Configuración de logs
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -16,23 +16,22 @@ class VideoRequest(BaseModel):
     custom_headers: Optional[Dict[str, str]] = None
 
 def get_ydl_opts(output_path, user_headers=None):
-    # Cargar cookies desde el secreto
+    # Configuración de Cookies
     cookies_content = os.getenv("YT_COOKIES_CONTENT")
     cookie_path = "/tmp/cookies.txt"
     
-    # Escribir el archivo de cookies si la variable existe
     if cookies_content:
         with open(cookie_path, "w") as f:
             f.write(cookies_content)
+        logger.info("Archivo de cookies creado correctamente.")
     
-    # Headers por defecto (muy realistas)
+    # Headers por defecto
     final_headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
         'Referer': 'https://www.youtube.com/',
         'Accept-Language': 'es-ES,es;q=0.9,en-US;q=0.8,en;q=0.7',
     }
     
-    # Mezclar con los headers personalizados si los envía n8n
     if user_headers:
         final_headers.update(user_headers)
         logger.info(f"Headers personalizados aplicados: {user_headers}")
@@ -53,6 +52,12 @@ def get_ydl_opts(output_path, user_headers=None):
     
     if os.path.exists(cookie_path):
         opts['cookiefile'] = cookie_path
+        
+    # Configuración de Proxy (ScraperAPI)
+    proxy_key = os.getenv("SCRAPERAPI_KEY")
+    if proxy_key:
+        opts['proxy'] = f"http://scraperapi:{proxy_key}@proxy-server.scraperapi.com:8001"
+        logger.info("Proxy configurado exitosamente mediante ScraperAPI.")
         
     return opts
 
