@@ -1,10 +1,11 @@
 import os
 import logging
 import yt_dlp
+from typing import Optional, Dict
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
-# Configurar logging para ver qué pasa en los logs de Cloud Run
+# Configuración de logs para ver qué está pasando en Cloud Run
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -12,22 +13,29 @@ app = FastAPI()
 
 class VideoRequest(BaseModel):
     url: str
+    custom_headers: Optional[Dict[str, str]] = None
 
-def get_ydl_opts(output_path):
-    # La variable que viene del Secret Manager
+def get_ydl_opts(output_path, user_headers=None):
+    # Cargar cookies desde el secreto
     cookies_content = os.getenv("YT_COOKIES_CONTENT")
     cookie_path = "/tmp/cookies.txt"
     
-    # Intentar escribir el archivo de cookies si la variable existe
+    # Escribir el archivo de cookies si la variable existe
     if cookies_content:
-        try:
-            with open(cookie_path, "w") as f:
-                f.write(cookies_content)
-            logger.info(f"Éxito: Archivo de cookies creado en {cookie_path}. Tamaño: {len(cookies_content)} bytes")
-        except Exception as e:
-            logger.error(f"Error escribiendo el archivo de cookies: {str(e)}")
-    else:
-        logger.warning("Advertencia: No se encontró la variable YT_COOKIES_CONTENT. Se intentará descargar sin cookies.")
+        with open(cookie_path, "w") as f:
+            f.write(cookies_content)
+    
+    # Headers por defecto (muy realistas)
+    final_headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+        'Referer': 'https://www.youtube.com/',
+        'Accept-Language': 'es-ES,es;q=0.9,en-US;q=0.8,en;q=0.7',
+    }
+    
+    # Mezclar con los headers personalizados si los envía n8n
+    if user_headers:
+        final_headers.update(user_headers)
+        logger.info(f"Headers personalizados aplicados: {user_headers}")
 
     opts = {
         'format': 'bestaudio/best',
@@ -37,27 +45,20 @@ def get_ydl_opts(output_path):
             'preferredquality': '192',
         }],
         'outtmpl': output_path,
-        'quiet': False, # Cambiado a False para ver errores detallados en los logs
+        'quiet': False,
         'no_warnings': False,
         'noplaylist': True,
-        # Un User-Agent más realista puede ayudar a evitar el bloqueo
-        'http_headers': {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
-        },
+        'http_headers': final_headers,
     }
     
-    # Solo añadimos el archivo de cookies si existe realmente
     if os.path.exists(cookie_path):
         opts['cookiefile'] = cookie_path
-        logger.info("Configuración: yt-dlp está usando el archivo de cookies.")
-    else:
-        logger.info("Configuración: yt-dlp NO está usando archivo de cookies.")
         
     return opts
 
-def descargar_audio(url_video):
+def descargar_audio(url_video, user_headers=None):
     output_template = '/tmp/%(id)s.%(ext)s'
-    ydl_opts = get_ydl_opts(output_template)
+    ydl_opts = get_ydl_opts(output_template, user_headers)
 
     try:
         logger.info(f"Iniciando descarga de: {url_video}")
@@ -71,7 +72,7 @@ def descargar_audio(url_video):
 @app.post("/transcribir")
 async def transcribir(request: VideoRequest):
     try:
-        archivo_audio = descargar_audio(request.url)
+        archivo_audio = descargar_audio(request.url, request.custom_headers)
         return {"status": "success", "file": archivo_audio}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
