@@ -17,14 +17,20 @@ class VideoRequest(BaseModel):
     custom_headers: Optional[Dict[str, str]] = None
 
 def get_ydl_opts(output_path, user_headers=None):
-    # Configuración de Cookies
+    # Gestión de Cookies
     cookies_content = os.getenv("YT_COOKIES_CONTENT")
     cookie_path = "/tmp/cookies.txt"
+    
     if cookies_content:
         with open(cookie_path, "w") as f:
             f.write(cookies_content)
+        logger.info("Archivo de cookies creado.")
     
-    # Headers basados en tu script de Colab
+    # Debug: Verificar si la clave del proxy existe
+    proxy_key = os.getenv("SCRAPERAPI_KEY")
+    key_exists = "YES" if proxy_key else "NO"
+    logger.info(f"DEBUG: SCRAPERAPI_KEY encontrada en entorno: {key_exists}")
+
     final_headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
         'Referer': 'https://www.youtube.com/',
@@ -33,15 +39,10 @@ def get_ydl_opts(output_path, user_headers=None):
     if user_headers:
         final_headers.update(user_headers)
 
-    # Opciones probadas y funcionales
     opts = {
-        'format': 'bestaudio/best',
-        'postprocessors': [{
-            'key': 'FFmpegExtractAudio',
-            'preferredcodec': 'mp3',
-            'preferredquality': '192',
-        }],
-        'outtmpl': output_path, # Esto guardará como /tmp/ID.mp3
+        'format': 'best/bestaudio',
+        'postprocessors': [{'key': 'FFmpegExtractAudio', 'preferredcodec': 'mp3', 'preferredquality': '192'}],
+        'outtmpl': output_path,
         'quiet': False,
         'no_warnings': False,
         'noplaylist': True,
@@ -51,9 +52,10 @@ def get_ydl_opts(output_path, user_headers=None):
     if os.path.exists(cookie_path):
         opts['cookiefile'] = cookie_path
         
-    proxy_key = os.getenv("SCRAPERAPI_KEY")
     if proxy_key:
+        # Usamos render=true para asegurar que ScraperAPI simule un navegador humano
         opts['proxy'] = f"http://scraperapi:{proxy_key}@proxy-server.scraperapi.com:8001/?render=true"
+        logger.info("Proxy con renderizado configurado.")
         
     return opts
 
@@ -63,27 +65,22 @@ def transcribir_video(url_video, user_headers=None):
 
     # 1. Descarga
     try:
-        logger.info(f"Iniciando descarga con yt-dlp: {url_video}")
+        logger.info(f"Iniciando descarga: {url_video}")
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([url_video])
     except Exception as e:
         logger.error(f"Error en descarga: {str(e)}")
         raise Exception(f"Fallo en descarga: {str(e)}")
 
-    # 2. Transcripción (Optimizada para CPU en Cloud Run)
+    # 2. Transcripción
     try:
         logger.info("Cargando Whisper (CPU mode)...")
-        # Cambiamos a device="cpu" y compute_type="int8" para que no pete en Cloud Run
         model = WhisperModel("small", device="cpu", compute_type="int8") 
-        
         logger.info("Transcribiendo...")
         segments, info = model.transcribe(output_filename, beam_size=5, language="es")
         
-        texto_completo = []
-        for segment in segments:
-            texto_completo.append(segment.text)
+        texto_completo = [segment.text for segment in segments]
         
-        # Limpieza
         if os.path.exists(output_filename):
             os.remove(output_filename)
             
