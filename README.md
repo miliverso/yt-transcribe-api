@@ -1,44 +1,54 @@
-# yt-transcribe-api
+# YouTube Audio Ingestion API
 
-Automated YouTube audio extraction and transcription service built with FastAPI and `faster-whisper`. Designed for serverless deployment on Google Cloud Run as part of the Ailyn AI ecosystem.
+A fast, lightweight, and *stateless* microservice built with FastAPI, specifically designed to extract and optimize YouTube audio for Speech-to-Text (STT) pipelines and LLM processing.
 
-## Overview
-This service provides an HTTP endpoint to ingest YouTube video URLs, extract audio, and return accurate, timestamped transcriptions using OpenAI's Whisper model (via `faster-whisper` for optimized performance).
+This module acts as the media ingestion engine, delegating the heavy lifting of transcription to external services in order to maintain a container with a low CPU and RAM footprint.
 
-## Features
-* **Automated Extraction:** Handles video-to-audio conversion using `yt-dlp`.
-* **High-Speed Transcription:** Uses `faster-whisper` for efficient inference.
-* **Serverless Ready:** Optimized for Google Cloud Run (containerized).
-* **Stateless Architecture:** Designed for high-concurrency and cost-effective execution.
+## 🚀 Key Features (Updated Architecture)
 
-## API Usage
+* **AI-Optimized Extraction:** Audio is automatically processed to 16kHz, single-channel (mono), and 64kbps. This is the exact format required by engines like Whisper, saving massive amounts of bandwidth.
+* **Safe Concurrency (Stateless):** Utilizes a job isolation system via UUIDs. It allows processing multiple simultaneous downloads without temporary files colliding with each other.
+* **Automatic Cleanup (Garbage Collection):** Implements Starlette's `BackgroundTask` to safely and automatically delete audio files from the server immediately after the HTTP response is completed.
+* **Optimized Docker:** Built on `python:3.11-slim`, fully leveraging Docker layer caching for fast deployments.
+* **YouTube Resilience:** Uses unpinned `yt-dlp`, ensuring the microservice can always fetch the latest patches to bypass updated YouTube restrictions.
 
-### Endpoint: `POST /transcribir`
+## 🛠️ Tech Stack
 
-**Request:**
-```json
-{
-  "url": "[https://www.youtube.com/watch?v=YOUR_VIDEO_ID](https://www.youtube.com/watch?v=YOUR_VIDEO_ID)"
-}
+* **Framework:** FastAPI + Uvicorn (with `uvloop` and `httptools` for maximum concurrent performance).
+* **Core:** Python 3.11
+* **Media Processing:** yt-dlp + native FFmpeg.
+
+## 📦 Docker Deployment
+
+Build the optimized image:
+```bash
+docker build -t youtube-audio-api .
+
+Run the container exposing port 8000:
+
+Bash
+docker run -d -p 8000:8000 --name yt-ingestion youtube-audio-api
+📡 API Endpoints
+1. Health Check
+Verifies that the container and server are alive.
+
+GET /health
+
 Response:
 
 JSON
 {
-  "transcription": "Here is the full text transcription of the video content..."
+  "status": "ok"
 }
-Tech Stack
-Framework: FastAPI
+2. Download Audio
+Extracts audio from a video and returns it as a physical MP3 file.
 
-Audio Processing: yt-dlp, ffmpeg
+POST /download-audio
 
-Transcription: faster-whisper
+Body (JSON):
 
-Infrastructure: Docker, Google Cloud Run
-
-Deployment
-Connect this repository to Google Cloud Run.
-
-Set the build trigger to use the included Dockerfile.
-
-Configure the service with 1 instance limit for the "Always Free" tier.
-
+JSON
+{
+  "url": "[https://www.youtube.com/watch?v=EXAMPLE](https://www.youtube.com/watch?v=EXAMPLE)"
+}
+Response: audio/mpeg file (direct .mp3 download). The file is instantly deleted from the server after the download finishes.
